@@ -1,0 +1,11 @@
+.env
+credentials.json
+token.json
+
+db/
+db_old/
+
+__pycache__/
+*.pyc
+
+.idea/
