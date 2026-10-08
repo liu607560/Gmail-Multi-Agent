@@ -7,12 +7,15 @@ from datetime import datetime, timedelta
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from google.auth.transport.requests import Request
+from google_auth_httplib2 import AuthorizedHttp
 from google.oauth2.credentials import Credentials
+import httplib2
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 
 SCOPES = ['https://www.googleapis.com/auth/gmail.modify']
+PROCESSED_UNRELATED_LABEL = "AI_PROCESSED_UNRELATED"
 
 class GmailToolsClass:
     def __init__(self):
@@ -64,7 +67,7 @@ class GmailToolsClass:
             before_timestamp = int(now.timestamp())
 
             # Query to get emails from the last 8 hours
-            query = f"after:{after_timestamp} before:{before_timestamp}"
+            query = f"after:{after_timestamp} before:{before_timestamp} -label:{PROCESSED_UNRELATED_LABEL}"
             results = self.service.users().messages().list(
                 userId="me", q=query, maxResults=max_results
             ).execute()
@@ -75,6 +78,30 @@ class GmailToolsClass:
         except Exception as error:
             print(f"An error occurred while fetching emails: {error}")
             return []
+
+    def mark_unrelated_email(self, email):
+        """Marks an unrelated email so future runs do not process it again."""
+        try:
+            label_id = self._get_or_create_label(PROCESSED_UNRELATED_LABEL)
+            self.service.users().messages().modify(
+                userId="me",
+                id=email.id,
+                body={"addLabelIds": [label_id]},
+            ).execute()
+        except Exception as error:
+            print(f"An error occurred while marking unrelated email: {error}")
+
+    def _get_or_create_label(self, label_name):
+        labels = self.service.users().labels().list(userId="me").execute().get("labels", [])
+        for label in labels:
+            if label.get("name") == label_name:
+                return label["id"]
+
+        label = self.service.users().labels().create(
+            userId="me",
+            body={"name": label_name, "labelListVisibility": "labelShow", "messageListVisibility": "show"},
+        ).execute()
+        return label["id"]
         
     def fetch_draft_replies(self):
         """
@@ -155,6 +182,11 @@ class GmailToolsClass:
 
         
     def _get_gmail_service(self):
+        proxy_url = os.getenv("PROXY_URL")
+        if proxy_url:
+            os.environ.setdefault("HTTP_PROXY", proxy_url)
+            os.environ.setdefault("HTTPS_PROXY", proxy_url)
+
         creds = None
         if os.path.exists('token.json'):
             creds = Credentials.from_authorized_user_file('token.json', SCOPES)
@@ -166,7 +198,14 @@ class GmailToolsClass:
                 creds = flow.run_local_server(port=0)
             with open('token.json', 'w') as token:
                 token.write(creds.to_json())
-        
+
+        http = None
+        if proxy_url:
+            proxy_info = httplib2.proxy_info_from_url(proxy_url)
+            http = AuthorizedHttp(creds, http=httplib2.Http(proxy_info=proxy_info, timeout=30))
+
+        if http is not None:
+            return build('gmail', 'v1', http=http)
         return build('gmail', 'v1', credentials=creds)
     
     def _should_skip_email(self, email_info):

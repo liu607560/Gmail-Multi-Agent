@@ -10,7 +10,6 @@ class Workflow():
 
         # define all graph nodes
         workflow.add_node("load_inbox_emails", nodes.load_new_emails)
-        workflow.add_node("is_email_inbox_empty", nodes.is_email_inbox_empty)
         workflow.add_node("categorize_email", nodes.categorize_email)
         workflow.add_node("construct_rag_queries", nodes.construct_rag_queries)
         workflow.add_node("retrieve_from_rag", nodes.retrieve_from_rag)
@@ -23,9 +22,8 @@ class Workflow():
         workflow.set_entry_point("load_inbox_emails")
 
         # check if there are emails to process
-        workflow.add_edge("load_inbox_emails", "is_email_inbox_empty")
         workflow.add_conditional_edges(
-            "is_email_inbox_empty",
+            "load_inbox_emails",
             nodes.check_new_emails,
             {
                 "process": "categorize_email",
@@ -57,13 +55,27 @@ class Workflow():
             {
                 "send": "send_email",
                 "rewrite": "email_writer",
-                "stop": "categorize_email"
+                "stop": "send_email"
             }
         )
 
         # check if there are still emails to be processed
-        workflow.add_edge("send_email", "is_email_inbox_empty")
-        workflow.add_edge("skip_unrelated_email", "is_email_inbox_empty" )
+        workflow.add_conditional_edges(
+            "send_email",
+            nodes.check_new_emails,
+            {
+                "process": "categorize_email",
+                "empty": END
+            }
+        )
+        workflow.add_conditional_edges(
+            "skip_unrelated_email",
+            nodes.check_new_emails,
+            {
+                "process": "categorize_email",
+                "empty": END
+            }
+        )
 
         # Compile
         self.app = workflow.compile()

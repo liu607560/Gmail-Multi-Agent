@@ -1,10 +1,10 @@
 import os
 
-from langchain_community.chat_models.openai import ChatOpenAI
-from langchain_community.document_loaders import TextLoader
+from langchain_openai import ChatOpenAI
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
-from langchain_chroma import Chroma
+from langchain_postgres import PGVector
+from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
@@ -26,8 +26,8 @@ Context: {context}
 """
 
 print("Loading & Chunking Docs...")
-loader = TextLoader("./data/agency.txt")
-docs = loader.load()
+with open("./data/agency.txt", "r", encoding="utf-8") as file:
+    docs = [Document(page_content=file.read())]
 
 doc_splitter = RecursiveCharacterTextSplitter(chunk_size=300, chunk_overlap=50)
 doc_chunks = doc_splitter.split_documents(docs)
@@ -35,7 +35,16 @@ doc_chunks = doc_splitter.split_documents(docs)
 print("Creating vector embeddings...")
 embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001")
 
-vectorstore = Chroma.from_documents(doc_chunks, embeddings, persist_directory="db")
+connection = os.environ["PGVECTOR_CONNECTION_STRING"]
+collection_name = os.getenv("PGVECTOR_COLLECTION", "email_knowledge")
+
+vectorstore = PGVector.from_documents(
+    documents=doc_chunks,
+    embedding=embeddings,
+    collection_name=collection_name,
+    connection=connection,
+    use_jsonb=True,
+)
 
 # Semantic vector search
 vectorstore_retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
@@ -43,7 +52,7 @@ vectorstore_retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
 # Test RAG chain
 print("Test RAG chain...")
 prompt = ChatPromptTemplate.from_template(RAG_SEARCH_PROMPT_TEMPLATE)
-llm = ChatOpenAI(model="gpt-5.6-sol",
+llm = ChatOpenAI(model="gpt-6.1-sol",
                  api_key=os.environ["NEBULA_API_KEY"],
                  base_url=os.environ["NEBULA_BASE_URL"],
                  temperature=0.1)
@@ -55,8 +64,7 @@ rag_chain = (
     | StrOutputParser()
 )
 
-query = "What are your pricing options?"
+query = "你们有什么价格表"
 result = rag_chain.invoke(query)
 print(f"Question: {query}")
 print(f"Answer: {result}")
-

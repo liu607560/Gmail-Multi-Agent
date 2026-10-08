@@ -1,13 +1,14 @@
 langchain-core
+langchain-openai
 langchain_community 
 langgraph 
-langchain-groq 
 langchain_google_genai
-langchain_chroma
-chromadb
+langchain-postgres
+psycopg[binary]
 google-api-python-client
 google-auth-oauthlib
 google-auth-httplib2
+PySocks
 beautifulsoup4
 python-dotenv
 colorama

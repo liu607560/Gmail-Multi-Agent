@@ -36,5 +36,5 @@ print(Fore.GREEN + "Starting workflow..." + Style.RESET_ALL)
 for output in app.stream(initial_state, config):
     for key, value in output.items():
         print(Fore.CYAN + f"Finished running: {key}:" + Style.RESET_ALL)
-
+        print()
 

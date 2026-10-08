@@ -1,10 +1,9 @@
 import os
 
-from langchain_community.chat_models.openai import ChatOpenAI
+from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
-from langchain_groq import ChatGroq
-from langchain_chroma import Chroma
+from langchain_postgres import PGVector
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -13,16 +12,19 @@ from .prompts import *
 
 class Agents():
     def __init__(self):
-        # Choose which LLMs to use for each agent (GPT-4o, Gemini, LLAMA3,...)
-        llama = ChatGroq(model_name="llama-3.3-70b-versatile", temperature=0.1)
-        gemini = ChatOpenAI(model="gpt-5.6-sol",
-                            api_key=os.environ["NEBULA_API_KEY"],
-                            base_url=os.environ["NEBULA_BASE_URL"],
-                            temperature=0.1)
+        llm = ChatOpenAI(model="gpt-6.1-sol",
+                         api_key=os.environ["NEBULA_API_KEY"],
+                         base_url=os.environ["NEBULA_BASE_URL"],
+                         temperature=0.1)
         
         # QA assistant chat
         embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001")
-        vectorstore = Chroma(persist_directory="db", embedding_function=embeddings)
+        vectorstore = PGVector(
+            embeddings=embeddings,
+            collection_name=os.getenv("PGVECTOR_COLLECTION", "email_knowledge"),
+            connection=os.environ["PGVECTOR_CONNECTION_STRING"],
+            use_jsonb=True,
+        )
         retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
 
         # Categorize email chain
@@ -32,7 +34,7 @@ class Agents():
         )
         self.categorize_email = (
             email_category_prompt | 
-            llama.with_structured_output(CategorizeEmailOutput)
+            llm.with_structured_output(CategorizeEmailOutput)
         )
 
         # Used to design queries for RAG retrieval
@@ -42,7 +44,7 @@ class Agents():
         )
         self.design_rag_queries = (
             generate_query_prompt | 
-            llama.with_structured_output(RAGQueriesOutput)
+            llm.with_structured_output(RAGQueriesOutput)
         )
         
         # Generate answer to queries using RAG
@@ -50,7 +52,7 @@ class Agents():
         self.generate_rag_answer = (
             {"context": retriever, "question": RunnablePassthrough()}
             | qa_prompt
-            | llama
+            | llm
             | StrOutputParser()
         )
 
@@ -64,7 +66,7 @@ class Agents():
         )
         self.email_writer = (
             writer_prompt | 
-            llama.with_structured_output(WriterOutput)
+            llm.with_structured_output(WriterOutput)
         )
 
         # Verify the generated email
@@ -74,5 +76,5 @@ class Agents():
         )
         self.email_proofreader = (
             proofreader_prompt | 
-            llama.with_structured_output(ProofReaderOutput) 
+            llm.with_structured_output(ProofReaderOutput)
         )

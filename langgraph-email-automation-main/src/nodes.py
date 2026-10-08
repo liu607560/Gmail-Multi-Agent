@@ -11,7 +11,7 @@ class Nodes:
 
     def load_new_emails(self, state: GraphState) -> GraphState:
         """Loads new emails from Gmail and updates the state."""
-        print(Fore.YELLOW + "Loading new emails...\n" + Style.RESET_ALL)
+        print(Fore.YELLOW + "Loading new emails..." + Style.RESET_ALL)
         recent_emails = self.gmail_tools.fetch_unanswered_emails()
         emails = [Email(**email) for email in recent_emails]
         return {"emails": emails}
@@ -25,12 +25,9 @@ class Nodes:
             print(Fore.GREEN + "New emails to process" + Style.RESET_ALL)
             return "process"
         
-    def is_email_inbox_empty(self, state: GraphState) -> GraphState:
-        return state
-
     def categorize_email(self, state: GraphState) -> GraphState:
         """Categorizes the current email using the categorize_email agent."""
-        print(Fore.YELLOW + "Checking email category...\n" + Style.RESET_ALL)
+        print(Fore.YELLOW + "Checking email category..." + Style.RESET_ALL)
         
         # Get the last email
         current_email = state["emails"][-1]
@@ -44,7 +41,6 @@ class Nodes:
 
     def route_email_based_on_category(self, state: GraphState) -> str:
         """Routes the email based on its category."""
-        print(Fore.YELLOW + "Routing email based on category...\n" + Style.RESET_ALL)
         category = state["email_category"]
         if category == "product_enquiry":
             return "product related"
@@ -55,7 +51,7 @@ class Nodes:
 
     def construct_rag_queries(self, state: GraphState) -> GraphState:
         """Constructs RAG queries based on the email content."""
-        print(Fore.YELLOW + "Designing RAG query...\n" + Style.RESET_ALL)
+        print(Fore.YELLOW + "Designing RAG query..." + Style.RESET_ALL)
         email_content = state["current_email"].body
         query_result = self.agents.design_rag_queries.invoke({"email": email_content})
         
@@ -63,7 +59,7 @@ class Nodes:
 
     def retrieve_from_rag(self, state: GraphState) -> GraphState:
         """Retrieves information from internal knowledge based on RAG questions."""
-        print(Fore.YELLOW + "Retrieving information from internal knowledge...\n" + Style.RESET_ALL)
+        print(Fore.YELLOW + "Retrieving information from internal knowledge..." + Style.RESET_ALL)
         final_answer = ""
         for query in state["rag_queries"]:
             rag_result = self.agents.generate_rag_answer.invoke(query)
@@ -73,7 +69,7 @@ class Nodes:
 
     def write_draft_email(self, state: GraphState) -> GraphState:
         """Writes a draft email based on the current email and retrieved information."""
-        print(Fore.YELLOW + "Writing draft email...\n" + Style.RESET_ALL)
+        print(Fore.YELLOW + "Writing draft email..." + Style.RESET_ALL)
         
         # Format input to the writer agent
         inputs = (
@@ -104,7 +100,7 @@ class Nodes:
 
     def verify_generated_email(self, state: GraphState) -> GraphState:
         """Verifies the generated email using the proofreader agent."""
-        print(Fore.YELLOW + "Verifying generated email...\n" + Style.RESET_ALL)
+        print(Fore.YELLOW + "Verifying generated email..." + Style.RESET_ALL)
         review = self.agents.email_proofreader.invoke({
             "initial_email": state["current_email"].body,
             "generated_email": state["generated_email"],
@@ -127,7 +123,7 @@ class Nodes:
             state["writer_messages"] = []
             return "send"
         elif state["trials"] >= 3:
-            print(Fore.RED + "Email is not good, we reached max trials must stop!!!" + Style.RESET_ALL)
+            print(Fore.RED + "Email did not pass review after max trials; saving the last draft for manual review." + Style.RESET_ALL)
             state["emails"].pop()
             state["writer_messages"] = []
             return "stop"
@@ -137,20 +133,21 @@ class Nodes:
 
     def create_draft_response(self, state: GraphState) -> GraphState:
         """Creates a draft response in Gmail."""
-        print(Fore.YELLOW + "Creating draft email...\n" + Style.RESET_ALL)
+        print(Fore.YELLOW + "Creating draft email..." + Style.RESET_ALL)
         self.gmail_tools.create_draft_reply(state["current_email"], state["generated_email"])
         
         return {"retrieved_documents": "", "trials": 0}
 
     def send_email_response(self, state: GraphState) -> GraphState:
         """Sends the email response directly using Gmail."""
-        print(Fore.YELLOW + "Sending email...\n" + Style.RESET_ALL)
+        print(Fore.YELLOW + "Sending email..." + Style.RESET_ALL)
         self.gmail_tools.send_reply(state["current_email"], state["generated_email"])
         
         return {"retrieved_documents": "", "trials": 0}
     
     def skip_unrelated_email(self, state):
         """Skip unrelated email and remove from emails list."""
-        print("Skipping unrelated email...\n")
+        print("Skipping unrelated email...")
+        self.gmail_tools.mark_unrelated_email(state["current_email"])
         state["emails"].pop()
         return state
