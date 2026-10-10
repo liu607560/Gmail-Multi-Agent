@@ -15,7 +15,8 @@ class Workflow():
         workflow.add_node("retrieve_from_rag", nodes.retrieve_from_rag)
         workflow.add_node("email_writer", nodes.write_draft_email)
         workflow.add_node("email_proofreader", nodes.verify_generated_email)
-        workflow.add_node("send_email", nodes.create_draft_response)
+        workflow.add_node("send_email", nodes.send_email_response)
+        workflow.add_node("save_draft", nodes.create_draft_response)
         workflow.add_node("skip_unrelated_email", nodes.skip_unrelated_email)
 
         # load inbox emails
@@ -55,13 +56,21 @@ class Workflow():
             {
                 "send": "send_email",
                 "rewrite": "email_writer",
-                "stop": "send_email"
+                "stop": "save_draft"
             }
         )
 
         # check if there are still emails to be processed
         workflow.add_conditional_edges(
             "send_email",
+            nodes.check_new_emails,
+            {
+                "process": "categorize_email",
+                "empty": END
+            }
+        )
+        workflow.add_conditional_edges(
+            "save_draft",
             nodes.check_new_emails,
             {
                 "process": "categorize_email",
