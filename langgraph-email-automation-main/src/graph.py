@@ -7,6 +7,7 @@ class Workflow():
         # initiate graph state & nodes
         workflow = StateGraph(GraphState)
         nodes = Nodes()
+        self.gmail_tools = nodes.gmail_tools
 
         # define all graph nodes
         workflow.add_node("load_inbox_emails", nodes.load_new_emails)

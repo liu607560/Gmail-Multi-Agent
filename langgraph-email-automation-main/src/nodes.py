@@ -11,15 +11,16 @@ class Nodes:
 
     def load_new_emails(self, state: GraphState) -> GraphState:
         """Loads new emails from Gmail and updates the state."""
-        print(Fore.YELLOW + "Loading new emails..." + Style.RESET_ALL)
         recent_emails = self.gmail_tools.fetch_unanswered_emails()
         emails = [Email(**email) for email in recent_emails]
+        if emails:
+            print(Fore.GREEN + "Starting workflow..." + Style.RESET_ALL)
+            print(Fore.YELLOW + "Loading new emails..." + Style.RESET_ALL)
         return {"emails": emails}
 
     def check_new_emails(self, state: GraphState) -> str:
         """Checks if there are new emails to process."""
         if len(state['emails']) == 0:
-            print(Fore.RED + "No new emails" + Style.RESET_ALL)
             return "empty"
         else:
             print(Fore.GREEN + "New emails to process" + Style.RESET_ALL)

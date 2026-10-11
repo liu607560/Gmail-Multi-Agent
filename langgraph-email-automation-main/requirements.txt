@@ -8,6 +8,8 @@ psycopg[binary]
 google-api-python-client
 google-auth-oauthlib
 google-auth-httplib2
+google-auth
+requests
 PySocks
 beautifulsoup4
 python-dotenv

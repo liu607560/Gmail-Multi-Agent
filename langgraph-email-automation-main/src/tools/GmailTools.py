@@ -20,6 +20,28 @@ PROCESSED_UNRELATED_LABEL = "AI_PROCESSED_UNRELATED"
 class GmailToolsClass:
     def __init__(self):
         self.service = self._get_gmail_service()
+
+    def watch_inbox(self, topic):
+        return self.service.users().watch(
+            userId="me",
+            body={"topicName": topic, "labelIds": ["INBOX"], "labelFilterBehavior": "include"},
+        ).execute()
+
+    def _has_sent_reply(self, email_info):
+        message_id = email_info.get("messageId")
+        if not message_id:
+            return False
+        thread = self.service.users().threads().get(
+            userId="me", id=email_info["threadId"], format="metadata",
+            metadataHeaders=["In-Reply-To", "References"],
+        ).execute()
+        for message in thread.get("messages", []):
+            if "SENT" not in message.get("labelIds", []):
+                continue
+            headers = {h["name"].lower(): h["value"] for h in message.get("payload", {}).get("headers", [])}
+            if message_id in (headers.get("in-reply-to", "") + " " + headers.get("references", "")).split():
+                return True
+        return False
         
     def fetch_unanswered_emails(self, max_results=50):
         """
@@ -45,16 +67,18 @@ class GmailToolsClass:
             for email in recent_emails:
                 thread_id = email['threadId']
                 if thread_id not in seen_threads and thread_id not in threads_with_drafts:
-                    seen_threads.add(thread_id)
                     email_info = self._get_email_info(email['id'])
                     if self._should_skip_email(email_info):
+                        continue
+                    seen_threads.add(thread_id)
+                    if self._has_sent_reply(email_info):
                         continue
                     unanswered_emails.append(email_info)
             return unanswered_emails
 
         except Exception as e:
             print(f"An error occurred: {e}")
-            return []
+            raise
 
     def fetch_recent_emails(self, max_results=50):
         try:
@@ -67,7 +91,7 @@ class GmailToolsClass:
             before_timestamp = int(now.timestamp())
 
             # Query to get emails from the last 8 hours
-            query = f"after:{after_timestamp} before:{before_timestamp} -label:{PROCESSED_UNRELATED_LABEL}"
+            query = f"after:{after_timestamp} before:{before_timestamp} -in:sent -in:drafts -label:{PROCESSED_UNRELATED_LABEL}"
             results = self.service.users().messages().list(
                 userId="me", q=query, maxResults=max_results
             ).execute()
@@ -77,7 +101,7 @@ class GmailToolsClass:
         
         except Exception as error:
             print(f"An error occurred while fetching emails: {error}")
-            return []
+            raise
 
     def mark_unrelated_email(self, email):
         """Marks an unrelated email so future runs do not process it again."""
@@ -90,6 +114,7 @@ class GmailToolsClass:
             ).execute()
         except Exception as error:
             print(f"An error occurred while marking unrelated email: {error}")
+            raise
 
     def _get_or_create_label(self, label_name):
         labels = self.service.users().labels().list(userId="me").execute().get("labels", [])
@@ -121,7 +146,7 @@ class GmailToolsClass:
 
         except Exception as error:
             print(f"An error occurred while fetching drafts: {error}")
-            return []
+            raise
 
     def create_draft_reply(self, initial_email, reply_text):
         try:
@@ -136,7 +161,7 @@ class GmailToolsClass:
             return draft
         except Exception as error:
             print(f"An error occurred while creating draft: {error}")
-            return None
+            raise
 
     def send_reply(self, initial_email, reply_text):
         try:
@@ -152,7 +177,7 @@ class GmailToolsClass:
 
         except Exception as error:
             print(f"An error occurred while sending reply: {error}")
-            return None
+            raise
         
     def _create_reply_message(self, email, reply_text, send=False):
         # Create message with proper headers
