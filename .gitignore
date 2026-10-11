@@ -1,0 +1,32 @@
+# Secrets and Google authorization credentials
+.env
+.env.*
+!.env.example
+credentials.json
+token.json
+application_default_credentials.json
+*-pubsub.json
+*service-account*.json
+
+# Python caches and virtual environments
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local editor configuration
+.idea/
+.vscode/
+
+# Local vector databases
+db/
+db_old/
+
+# Logs and operating-system files
+*.log
+Thumbs.db
+.DS_Store
