@@ -1,143 +1,133 @@
-<!--
-Title: Customer Support Email Automation System | Langchain/Langgraph Integration
-Description: Automate customer support emails with our system built using Langchain/Langgraph. Features include email categorization, query synthesis, draft email creation, and email verification.
-Keywords: Customer support automation, email automation, Langchain, Langgraph, AI email agents, Gmail API, Python email automation, email categorization, email verification, AI agents, AI tools
-Author: kaymen99
--->
+# Gmail Multi-Agent 邮件自动化分类回复
 
-# 🚀 **Customer Support Email Automation with AI Agents and RAG**
+基于 LangGraph 的客服邮件处理项目，通过 Gmail API 读取邮件，结合知识库生成回复并审核。审核通过后自动发送；最多尝试 3 次仍未通过时，保存最后一版为 Gmail 草稿，供人工复核。
 
-## 📩 **FULL TUTORIAL: Build AI-Powered Email Automation Using AI Agents + RAG!** 👉 [Read Now](https://dev.to/kaymen99/boost-customer-support-ai-agents-langgraph-and-rag-for-email-automation-21hj) 🎯   
+本项目在已有邮件工作流基础上进行了二次开发，主要改进包括 PostgreSQL/pgvector 接入、Google Cloud Pub/Sub 事件通知、自动发送与审核失败保存草稿、重复邮件过滤和日志优化。
 
-![customer-support-ai-automation](https://github.com/user-attachments/assets/eb061276-0579-4e28-9360-482c8da33a9d)
+## 功能与流程
 
-## **Introduction**  
+1. Gmail 邮箱变化通过 Pub/Sub 发布通知，本地 Python 程序通过 Pull 接口接收。
+2. 邮件分类为产品咨询、客户投诉、客户反馈或无关邮件。
+3. 产品咨询生成检索问题，通过 pgvector 检索知识库；投诉和反馈直接进入回复生成。
+4. 回复审核通过后发送，未通过则结合反馈重写，最多生成 3 版，仍未通过则保存草稿。
+5. 无关邮件添加标签；已有草稿的线程和已有回复的邮件被过滤，减少重复处理。
 
-In today's **fast-paced environment**, customers demand **quick, accurate, and personalized responses**—expectations that can overwhelm traditional support teams. Managing large volumes of emails, categorizing them, crafting appropriate replies, and ensuring quality consumes **significant time and resources**, often leading to **delays or errors**, which can harm customer satisfaction.  
+监听每天自动续期；没有待处理邮件时保持安静，通知处理异常时等待 30 秒后继续尝试。
 
-**Customer Support Email Automation** is an **AI solution** designed to enhance **customer communication** for businesses. Leveraging a **Langgraph-driven workflow**, multiple **AI agents** collaborate to efficiently manage, categorize, and respond to customer emails. The system also implements **RAG (Retrieval-Augmented Generation)** technology to deliver **accurate responses** to any business or product-related questions.  
+## 技术栈
 
-## **Features**  
+- Python / LangGraph / LangChain：状态管理、流程路由和模型调用。
+- ChatOpenAI：通过 OpenAI 兼容接口完成分类、查询生成、回复和审核。
+- Gemini Embeddings：使用 `models/gemini-embedding-001` 生成向量。
+- PostgreSQL / pgvector：知识库向量存储与检索。
+- Gmail API / OAuth 2.0：邮箱授权、读取、监听、草稿和发送。
+- Google Cloud Pub/Sub：邮箱变化通知。
+- FastAPI / LangServe：可选 HTTP 工作流接口，运行 `main.py` 不依赖它。
 
-### **Email Inbox Management with AI Agents**  
+## 项目结构
 
-- **Continuously monitors** the agency's Gmail inbox  
-- **Categorizes emails** into '**customer complaint**,' '**product inquiry**,' '**customer feedback**,' or '**unrelated**'  
-- **Automatically handles irrelevant emails** to maintain efficiency  
-
-### **AI Response Generation**  
-
-- **Quickly drafts emails** for customer complaints and feedback using **Langgraph**  
-- Utilizes **RAG techniques** to answer **product/service-related questions** accurately  
-- **Creates personalized email content** tailored to each customer's needs  
-
-### **Quality Assurance with AI**  
-
-- **Automatically checks** email **quality, formatting, and relevance**  
-- **Ensures every response** meets high standards before reaching the client  
-
-## **How It Works**  
-
-1. **Email Monitoring**: The system **constantly checks** for new emails in the agency's Gmail inbox using the **Gmail API**.  
-2. **Email Categorization**: **AI agents** sort each email into **predefined categories**.  
-3. **Response Generation**:   
-   - **For complaints or feedback**: The system **quickly drafts** a tailored email response.  
-   - **For service/product questions**: The system uses **RAG** to retrieve **accurate information** from agency documents and generates a response.  
-4. **Quality Assurance**: Each draft email undergoes **AI quality and formatting checks**.  
-5. **Sending**: **Approved emails** are sent to the client **promptly**, ensuring **timely communication**.  
-
-## System Flowchart
-
-This is the detailed flow of the system:
-
-[![](https://mermaid.ink/img/pako:eNqllEuP2jAQx7-KZa6AgAB5HFrxFlJBXbarIsIeTDwBi2CntrPAEr57TRIoW_Wwojk585_fvJLxCQeCAvZwGIl9sCFSox_9JUfm6fgTwZkWEo0mnfE3NOYrcXgtNFSpfEHd01jlZjTYxfr49Zyr3YuaTgWawt4ohEUqRQt_wCn6LkUASr3eOw5FYpQXTrjagwR6Q3p-j2hYC8neITcWXC_jXriEyDjQFHXv7b1EabEDiXpiF0eEcY1ME0MAuiLBNkV9_6dk2uidNXD9IaQpjyaBRgP-K2HymKKB_3zkegPqUsJTApKBQqEJN-uMCnKQzWLuj0CjTtYCCqXY3XnMM49_pu1n0tA3iUU4A0L_0odZWZ04luINUjTyn4HTD7PIPaamO4Vm8MYUE9z0mIujQjzonMkmlUtKHyMwHzJkUeSVQjcsKy3FFryS4zjFubJnVG-8RnwoByIS0ivVarV7vFvgq9Uf3LKsz-K9a_bV6hG8f80ePoQP_i_78DY69xF8VOBu-BA-v2Z_DF8UOKX08zguY7NW5j-i5sI4XcItsdmNHSyxZ46UyO0SL_nZ-JFEC7M5Afa0TKCMpUjWG-yFJFLmLYmp2ds-I2tJdjdrTDj2TviAvUbLrjYtt2G1XLdVr7XtZhkfjbnqNJyW4zZt17LdpuO0z2X8LoQJUau6rbbt2la7btmWW6s3s3iLTMxLAHq5zCb5dRcIHrI1Pv8GXQeX4g?type=png)](https://mermaid.live/edit#pako:eNqllEuP2jAQx7-KZa6AgAB5HFrxFlJBXbarIsIeTDwBi2CntrPAEr57TRIoW_Wwojk585_fvJLxCQeCAvZwGIl9sCFSox_9JUfm6fgTwZkWEo0mnfE3NOYrcXgtNFSpfEHd01jlZjTYxfr49Zyr3YuaTgWawt4ohEUqRQt_wCn6LkUASr3eOw5FYpQXTrjagwR6Q3p-j2hYC8neITcWXC_jXriEyDjQFHXv7b1EabEDiXpiF0eEcY1ME0MAuiLBNkV9_6dk2uidNXD9IaQpjyaBRgP-K2HymKKB_3zkegPqUsJTApKBQqEJN-uMCnKQzWLuj0CjTtYCCqXY3XnMM49_pu1n0tA3iUU4A0L_0odZWZ04luINUjTyn4HTD7PIPaamO4Vm8MYUE9z0mIujQjzonMkmlUtKHyMwHzJkUeSVQjcsKy3FFryS4zjFubJnVG-8RnwoByIS0ivVarV7vFvgq9Uf3LKsz-K9a_bV6hG8f80ePoQP_i_78DY69xF8VOBu-BA-v2Z_DF8UOKX08zguY7NW5j-i5sI4XcItsdmNHSyxZ46UyO0SL_nZ-JFEC7M5Afa0TKCMpUjWG-yFJFLmLYmp2ds-I2tJdjdrTDj2TviAvUbLrjYtt2G1XLdVr7XtZhkfjbnqNJyW4zZt17LdpuO0z2X8LoQJUau6rbbt2la7btmWW6s3s3iLTMxLAHq5zCb5dRcIHrI1Pv8GXQeX4g)
-
-## Tech Stack
-
-* Langchain & Langgraph: for developing AI agents workflow.
-* Langserve: simplify API development & deployment (using FastAPI).
-* Groq and Gemini APIs: for LLMs access.
-* Google Gmail API
-
-## How to Run
-
-### Prerequisites
-
-- Python 3.7+
-- Groq api key
-- Google Gemini api key (for embeddings)
-- Gmail API credentials
-- Necessary Python libraries (listed in `requirements.txt`)
-
-### Setup
-
-1. **Clone the repository:**
-
-   ```sh
-   git clone https://github.com/kaymen99/langgraph-email-automation.git
-   cd langgraph-email-automation
-   ```
-
-2. **Create and activate a virtual environment:**
-
-   ```sh
-   python -m venv venv
-   source venv/bin/activate  # On Windows use `venv\Scripts\activate`
-   ```
-
-3. **Install the required packages:**
-
-   ```sh
-   pip install -r requirements.txt
-   ```
-
-4. **Set up environment variables:**
-
-   Create a `.env` file in the root directory of the project and add your GMAIL address, we are using the Groq llama-3.1-70b model and the Google gemini embedding model so you must also get API keys to access them:
-
-   ```env
-   MY_EMAIL=your_email@gmail.com
-   GROQ_API_KEY=your_groq_api_key
-   GOOGLE_API_KEY=your_gemini_api_key
-   ```
-
-5. **Ensure Gmail API is enabled:**
-
-   Follow [this guide](https://developers.google.com/gmail/api/quickstart/python) to enable Gmail API and obtain your credentials.
-
-### Running the Application
-
-1. **Start the workflow:**
-
-   ```sh
-   python main.py
-   ```
-
-   The application will start checking for new emails, categorizing them, synthesizing queries, drafting responses, and verifying email quality.
-
-2. **Deploy as API:** you can deploy the workflow as an API using Langserve and FastAPI by running the command below:
-
-   ```sh
-   python deploy_api.py
-   ```
-
-   The workflow api will be running on `localhost:8000`, you can consult the API docs on `/docs` and you can use the langsergve playground (on the route `/playground`) to test it out.
-
-
-### Customization
-
-You can customize the behavior of each agent by modifying the corresponding methods in the `Nodes` class or the agents prompt `prompts` located in the `src` directory.
-
-You can also add your own agency data into the `data` folder, then you must create your own vector store by running (update first the data path):
-
-```sh
-python create_index.py
+```text
+main.py                    接收通知并运行工作流
+create_index.py             文本切分、向量化和入库
+deploy_api.py              可选 HTTP API 入口
+data/agency.txt            示例产品知识
+src/
+  graph.py                 工作流节点与路由
+  nodes.py                 业务步骤
+  agents.py                模型与 RAG 链
+  prompts.py               提示词
+  state.py                 邮件结构和工作流状态
+  structure_outputs.py     模型结构化输出
+  tools/GmailTools.py       Gmail 操作
 ```
 
-### Contributing
+## 本地运行
 
-Contributions are welcome! Please open an issue or submit a pull request for any changes.
+以下命令以 Windows PowerShell 为例。准备 Python 环境、启用 pgvector 的 PostgreSQL 实例和模型 API 权限。
 
-### Contact
+### 获取代码
 
-If you have any questions or suggestions, feel free to contact me at `aymenMir1001@gmail.com`.
+```powershell
+git clone https://github.com/liu607560/Gmail-Multi-Agent.git
+cd Gmail-Multi-Agent/langgraph-email-automation-main
+python -m pip install -r requirements.txt
+```
+
+### 环境配置
+
+在 `main.py` 所在目录创建 `.env`，填写自己的配置：
+
+```dotenv
+MY_EMAIL=your_email@gmail.com
+NEBULA_API_KEY=your_model_api_key
+NEBULA_BASE_URL=https://your-provider.example/v1
+GOOGLE_API_KEY=your_gemini_api_key
+PGVECTOR_CONNECTION_STRING=postgresql+psycopg://user:password@localhost:5432/email_db
+PGVECTOR_COLLECTION=email_knowledge
+GOOGLE_CLOUD_PROJECT=your_google_cloud_project_id
+GMAIL_PUBSUB_TOPIC=gmail-notifications
+GMAIL_PUBSUB_SUBSCRIPTION=gmail-notifications-sub
+```
+
+当前模型名在 `src/agents.py` 和 `create_index.py` 中配置为 `gpt-6.1-sol`，使用其他服务商时需改成其支持的模型。
+
+需要代理时额外配置，端口以自己的代理软件为准：
+
+```dotenv
+PROXY_URL=http://127.0.0.1:7897
+HTTP_PROXY=http://127.0.0.1:7897
+HTTPS_PROXY=http://127.0.0.1:7897
+NO_PROXY=localhost,127.0.0.1,::1
+```
+
+### Google Cloud 配置
+
+在同一个 Google Cloud 项目中：
+
+1. 启用 Gmail API 和 Cloud Pub/Sub API。
+2. 配置 OAuth 同意屏幕，创建桌面应用 OAuth 客户端，将下载凭证命名为 `credentials.json`，放到 `main.py` 所在目录。
+3. 创建主题 `gmail-notifications` 和 Pull 订阅 `gmail-notifications-sub`。
+4. 在主题上为 `gmail-api-push@system.gserviceaccount.com` 授予 `Pub/Sub Publisher`。
+5. 确保本地登录账号有接收订阅消息及设置配额项目所需的权限。
+
+安装 Google Cloud CLI 后，配置本机应用默认凭证（ADC）：
+
+```powershell
+gcloud.cmd auth application-default login
+gcloud.cmd auth application-default set-quota-project YOUR_PROJECT_ID
+```
+
+将 `YOUR_PROJECT_ID` 替换为自己的项目 ID。ADC 用于 Pub/Sub；Gmail 使用单独的 OAuth 授权，首次运行时打开浏览器，成功后生成 `token.json`。
+
+### 建立知识库并启动
+
+修改 `data/agency.txt` 为需要的业务资料，然后执行：
+
+```powershell
+python create_index.py
+python main.py
+```
+
+当前切分参数为 `chunk_size=300`、`chunk_overlap=50`，检索 `k=3`。建库脚本还会运行测试查询；未实现文档自动替换或去重，重复运行可能追加重复片段。
+
+程序启动监听后等待通知。开启监听本身也会产生初始通知，可能处理现有待处理邮件。审核通过会真实发送，建议先用测试邮箱验证。
+
+电脑、程序、数据库和所需网络连接应保持运行，按 `Ctrl+C` 停止。当前读取范围为最近 8 小时、最多 50 封，并非完整的邮件历史同步系统。
+
+## 可选 API 入口
+
+```powershell
+python deploy_api.py
+```
+
+该入口通过 FastAPI / LangServe 提供工作流接口，默认端口 `8000`，文档路径 `/docs`。它独立于通知监听，不会代替 `main.py` 的接收循环。当前未接入 MCP。
+
+## 示例资料和本地凭证
+
+`data/agency.txt` 中的 Agentia 是示例产品，`src/prompts.py` 中回复署名为 `The Agentia Team`。使用自己的业务时应同时调整知识资料和回复署名。
+
+`.env`、`credentials.json`、`token.json` 和 ADC 凭证属于本地配置，不应提交。忽略规则不会清除历史中的敏感信息。
+
+## 项目来源
+
+基于 [kaymen99/langgraph-email-automation](https://github.com/kaymen99/langgraph-email-automation) 二次开发。本仓库增加了事件通知接入、向量库迁移、自动发送与审核失败保存草稿等改进；原始工作流来自上述项目。
